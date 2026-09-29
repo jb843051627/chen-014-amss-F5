@@ -17,6 +17,7 @@ import java.util.Date;
 
 /**
  * 三夏三秋检修复查与上门服务派单条目对象 t_amss_duty_task
+ * 一行只管一件事；倒计时口径全站唯一：从 dueAt 这一末尾刻往前倒 amount 个自然日。
  *
  * @author fuce
  * @date 2026-09-12
@@ -32,31 +33,78 @@ public class TAmssDutyTask implements Serializable {
     @ApiModelProperty(value = "主键")
     private Long id;
 
-    /** 检修复查与上门服务派单事项号 */
+    /** 派单事项号（一件事一行，不重号） */
     @TableField("item_no")
-    @ApiModelProperty(value = "检修复查与上门服务派单事项号")
+    @ApiModelProperty(value = "派单事项号")
     private String itemNo;
 
-    /** 本项应当到场那天的最后一刻 */
+    /** 事项类别 1检修复查 2上门维修技术服务 3跨区作业服务点值守 */
+    @TableField("item_type")
+    @ApiModelProperty(value = "事项类别 1检修复查 2上门维修技术服务 3跨区作业服务点值守")
+    private Integer itemType;
+
+    /** 本项应当到场那天的最后一刻（倒计时从这一刻往前倒） */
     @TableField("due_at")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @ApiModelProperty(value = "本项应当到场那天的最后一刻")
     private Date dueAt;
 
-    /** 单条提前派单的自然日数 */
+    /** 本站定的提前开口自然日数（口径要挪只动它，不得后推截止时刻） */
     @TableField("amount")
-    @ApiModelProperty(value = "单条提前派单的自然日数")
+    @ApiModelProperty(value = "提前开口自然日数")
     private BigDecimal amount;
 
-    /** 派单事由与受派班组记要 */
+    /** 是否三夏三秋重点时期 0常规 1重点（重点期上门按值守班次走，不受两个时段约束） */
+    @TableField("busy_season")
+    @ApiModelProperty(value = "是否重点时期 0常规 1重点")
+    private Integer busySeason;
+
+    /** 所属班组字号（该班整季停摆则挂起） */
+    @TableField("team_no")
+    @ApiModelProperty(value = "所属班组字号")
+    private String teamNo;
+
+    /** 涉事机具牌证号（牌证年初已收回则挂起） */
+    @TableField("mach_card_no")
+    @ApiModelProperty(value = "涉事机具牌证号")
+    private String machCardNo;
+
+    /** 派单事由 */
     @TableField("content")
-    @ApiModelProperty(value = "派单事由与受派班组记要")
+    @ApiModelProperty(value = "派单事由")
     private String content;
 
-    /** 条目情形 0待派 1已派 2派不出去 */
+    /** 条目情形 0待派 1已派 2挂起(派不出去) */
     @TableField("status")
-    @ApiModelProperty(value = "条目情形 0待派 1已派 2派不出去")
+    @ApiModelProperty(value = "条目情形 0待派 1已派 2挂起")
     private Integer status;
+
+    /** 头一回派出的班组（收回重派也不覆盖） */
+    @TableField("first_team_no")
+    @ApiModelProperty(value = "头一回派出的班组")
+    private String firstTeamNo;
+
+    /** 头一回派出的时刻（收回重派也不覆盖） */
+    @TableField("first_assign_time")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @ApiModelProperty(value = "头一回派出的时刻")
+    private Date firstAssignTime;
+
+    /** 当前受派班组 */
+    @TableField("assigned_team_no")
+    @ApiModelProperty(value = "当前受派班组")
+    private String assignedTeamNo;
+
+    /** 当前这一遍派出的时刻 */
+    @TableField("assign_time")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @ApiModelProperty(value = "当前这一遍派出的时刻")
+    private Date assignTime;
+
+    /** 挂起缘故（当场写清，页面仍可翻见） */
+    @TableField("hold_reason")
+    @ApiModelProperty(value = "挂起缘故")
+    private String holdReason;
 
     /** 删除标记 0正常 1删除 */
     @TableField("del_flag")
@@ -106,6 +154,14 @@ public class TAmssDutyTask implements Serializable {
         this.itemNo = itemNo;
     }
 
+    public Integer getItemType() {
+        return itemType;
+    }
+
+    public void setItemType(Integer itemType) {
+        this.itemType = itemType;
+    }
+
     public Date getDueAt() {
         return dueAt;
     }
@@ -122,6 +178,30 @@ public class TAmssDutyTask implements Serializable {
         this.amount = amount;
     }
 
+    public Integer getBusySeason() {
+        return busySeason;
+    }
+
+    public void setBusySeason(Integer busySeason) {
+        this.busySeason = busySeason;
+    }
+
+    public String getTeamNo() {
+        return teamNo;
+    }
+
+    public void setTeamNo(String teamNo) {
+        this.teamNo = teamNo;
+    }
+
+    public String getMachCardNo() {
+        return machCardNo;
+    }
+
+    public void setMachCardNo(String machCardNo) {
+        this.machCardNo = machCardNo;
+    }
+
     public String getContent() {
         return content;
     }
@@ -136,6 +216,46 @@ public class TAmssDutyTask implements Serializable {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public String getFirstTeamNo() {
+        return firstTeamNo;
+    }
+
+    public void setFirstTeamNo(String firstTeamNo) {
+        this.firstTeamNo = firstTeamNo;
+    }
+
+    public Date getFirstAssignTime() {
+        return firstAssignTime;
+    }
+
+    public void setFirstAssignTime(Date firstAssignTime) {
+        this.firstAssignTime = firstAssignTime;
+    }
+
+    public String getAssignedTeamNo() {
+        return assignedTeamNo;
+    }
+
+    public void setAssignedTeamNo(String assignedTeamNo) {
+        this.assignedTeamNo = assignedTeamNo;
+    }
+
+    public Date getAssignTime() {
+        return assignTime;
+    }
+
+    public void setAssignTime(Date assignTime) {
+        this.assignTime = assignTime;
+    }
+
+    public String getHoldReason() {
+        return holdReason;
+    }
+
+    public void setHoldReason(String holdReason) {
+        this.holdReason = holdReason;
     }
 
     public Integer getDelFlag() {

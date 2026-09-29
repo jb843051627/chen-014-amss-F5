@@ -59,19 +59,77 @@ CREATE TABLE IF NOT EXISTS t_amss_diff_row (
 
 CREATE TABLE IF NOT EXISTS t_amss_duty_task (
   id bigint NOT NULL COMMENT '主键',
-  item_no varchar(64) DEFAULT NULL COMMENT '检修复查与上门服务派单事项号',
-  due_at datetime DEFAULT NULL COMMENT '本项应当到场那天的最后一刻',
-  amount decimal(12,2) DEFAULT NULL COMMENT '单条提前派单的自然日数',
-  content varchar(255) DEFAULT NULL COMMENT '派单事由与受派班组记要',
-  status int DEFAULT NULL COMMENT '条目情形 0待派 1已派 2派不出去',
+  item_no varchar(64) NOT NULL COMMENT '派单事项号（一件事一行，不重号）',
+  item_type int DEFAULT NULL COMMENT '事项类别 1检修复查 2上门维修技术服务 3跨区作业服务点值守',
+  due_at datetime DEFAULT NULL COMMENT '本项应当到场那天的最后一刻（倒计时从这一刻往前倒）',
+  amount decimal(12,2) DEFAULT NULL COMMENT '本站定的提前开口自然日数（口径要挪只动它）',
+  busy_season int DEFAULT '0' COMMENT '是否三夏三秋重点时期 0常规 1重点(重点期上门不受两个时段约束)',
+  team_no varchar(64) DEFAULT NULL COMMENT '所属班组字号（该班整季停摆则挂起）',
+  mach_card_no varchar(64) DEFAULT NULL COMMENT '涉事机具牌证号（牌证年初已收回则挂起）',
+  content varchar(255) DEFAULT NULL COMMENT '派单事由',
+  status int DEFAULT NULL COMMENT '条目情形 0待派 1已派 2挂起(派不出去)',
+  first_team_no varchar(64) DEFAULT NULL COMMENT '头一回派出的班组（收回重派也不覆盖）',
+  first_assign_time datetime DEFAULT NULL COMMENT '头一回派出的时刻（收回重派也不覆盖）',
+  assigned_team_no varchar(64) DEFAULT NULL COMMENT '当前受派班组',
+  assign_time datetime DEFAULT NULL COMMENT '当前这一遍派出的时刻',
+  hold_reason varchar(255) DEFAULT NULL COMMENT '挂起缘故（当场写清，页面仍可翻见）',
   del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
   create_by varchar(64) DEFAULT NULL COMMENT '创建者',
   create_time datetime DEFAULT NULL COMMENT '创建时间',
   update_by varchar(64) DEFAULT NULL COMMENT '更新者',
   update_time datetime DEFAULT NULL COMMENT '更新时间',
   remark varchar(500) DEFAULT NULL COMMENT '备注',
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_duty_item_no (item_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='三夏三秋检修复查与上门服务派单条目';
+
+CREATE TABLE IF NOT EXISTS t_amss_duty_team (
+  id bigint NOT NULL COMMENT '主键',
+  team_no varchar(64) NOT NULL COMMENT '班组字号',
+  team_name varchar(128) DEFAULT NULL COMMENT '班组名称',
+  status int DEFAULT '0' COMMENT '班组情形 0当班 1整季停摆',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_duty_team_no (team_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='派单受派班组底档';
+
+CREATE TABLE IF NOT EXISTS t_amss_mach_card (
+  id bigint NOT NULL COMMENT '主键',
+  card_no varchar(64) NOT NULL COMMENT '机具牌证号',
+  card_name varchar(128) DEFAULT NULL COMMENT '机车/机主标注',
+  status int DEFAULT '0' COMMENT '牌证情形 0有效 1年初已收回',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_mach_card_no (card_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='机具牌证底档（年初收回登记）';
+
+CREATE TABLE IF NOT EXISTS t_amss_duty_log (
+  id bigint NOT NULL COMMENT '主键',
+  item_no varchar(64) NOT NULL COMMENT '派单事项号',
+  team_no varchar(64) NOT NULL COMMENT '受派班组字号',
+  action int NOT NULL COMMENT '流水动作 1派出 2收回',
+  action_time datetime NOT NULL COMMENT '动作落账时刻',
+  action_day date NOT NULL COMMENT '动作当日（同事项同班组同动作当日只留头一条）',
+  reason varchar(255) DEFAULT NULL COMMENT '缘故（收回缘故等）',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_duty_log_once (item_no, team_no, action_day, action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='派单流水（派出/收回留痕，头一条不动）';
 
 CREATE TABLE IF NOT EXISTS t_amss_out_card (
   id bigint NOT NULL COMMENT '主键',
@@ -131,4 +189,32 @@ CREATE TABLE IF NOT EXISTS t_amss_team_card (
 INSERT IGNORE INTO t_amss_coop_doc (id, site_no, site_name, site_type, road_name, th1_max, th2_max, th3_max, status, del_flag, create_by, create_time)
 VALUES (0, 'ZZ00', '江原县农机服务组织底档（临川县支农农机专业合作社）', '农机合作社', '江原省—江原市—临川县', 80.00, 200.00, 500.00, 0, 0, 'seed', NOW()),
        (1, 'ZZ01', '江原县农机服务组织底档（临川县丰收跨区作业队，已收回）', '跨区作业队', '江原省—江原市—临川县', 80.00, 200.00, 500.00, 1, 0, 'seed', NOW());
+
+-- 派单受派班组底档：T01/T02 当班，T03 整季停摆
+INSERT IGNORE INTO t_amss_duty_team (id, team_no, team_name, status, del_flag, create_by, create_time)
+VALUES (101, 'T01', '临川县农机一队', 0, 0, 'seed', NOW()),
+       (102, 'T02', '临川县农机二队', 0, 0, 'seed', NOW()),
+       (103, 'T03', '临川县农机三队（整季停摆）', 1, 0, 'seed', NOW());
+
+-- 机具牌证底档：G0001 有效，G0002 年初已收回
+INSERT IGNORE INTO t_amss_mach_card (id, card_no, card_name, status, del_flag, create_by, create_time)
+VALUES (201, 'G0001', '履带拖拉机（机主老周）', 0, 0, 'seed', NOW()),
+       (202, 'G0002', '轮式拖拉机（牌证已收回）', 1, 0, 'seed', NOW());
+
+-- 派单条目种子：到期日按当天动态算，便于周期任务首轮即见账
+INSERT IGNORE INTO t_amss_duty_task
+(id, item_no, item_type, due_at, amount, busy_season, team_no, mach_card_no, content, status, del_flag, create_by, create_time)
+VALUES
+(301, 'SX-FC-0001', 1, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 2.00, 0, 'T01', 'G0001', '履带拖拉机检修复查', 0, 0, 'seed', NOW()),
+(302, 'SX-SM-0002', 2, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 0.00, 0, 'T02', 'G0001', '上门维修技术服务（时段外按住等下轮）', 0, 0, 'seed', NOW()),
+(303, 'SQ-DY-0003', 3, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 0.00, 1, 'T01', NULL, '三秋跨区作业服务点值守（重点期不受时段约束）', 0, 0, 'seed', NOW()),
+(304, 'SX-FC-0004', 1, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 0.00, 0, 'T03', 'G0001', '检修复查（所属班组整季停摆，应挂起）', 0, 0, 'seed', NOW()),
+(305, 'SX-FC-0005', 1, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 0.00, 0, 'T02', 'G0002', '检修复查（机具牌证年初已收回，应挂起）', 0, 0, 'seed', NOW()),
+(306, 'SX-FC-0006', 1, CAST(CONCAT(DATE_ADD(CURDATE(), INTERVAL 10 DAY), ' 23:59:59') AS DATETIME), 0.00, 0, 'T01', 'G0001', '十日后到场（未开口，本轮不动）', 0, 0, 'seed', NOW()),
+(307, 'SX-FC-0007', 1, CAST(CONCAT(CURDATE(), ' 23:59:59') AS DATETIME), 1.00, 0, 'T01', 'G0001', '昨日派出当日未回话（应收回留痕、重派别家）',
+       1, 0, 'seed', NOW());
+UPDATE t_amss_duty_task
+SET first_team_no = 'T01', first_assign_time = CAST(CONCAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), ' 10:00:00') AS DATETIME),
+    assigned_team_no = 'T01', assign_time = CAST(CONCAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), ' 10:00:00') AS DATETIME)
+WHERE item_no = 'SX-FC-0007';
 

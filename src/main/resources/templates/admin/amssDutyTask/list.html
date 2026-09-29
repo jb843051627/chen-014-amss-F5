@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('三夏三秋派单台账')"/>
+</head>
+<body class="pear-container">
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">事项号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="itemNo" placeholder="" class="layui-input">
+                </div>
+                <label class="layui-form-label">事项类别</label>
+                <div class="layui-input-inline">
+                    <select name="itemType" class="layui-input">
+                        <option value="">全部</option>
+                        <option value="1">检修复查</option>
+                        <option value="2">上门维修技术服务</option>
+                        <option value="3">跨区作业服务点值守</option>
+                    </select>
+                </div>
+                <label class="layui-form-label">情形</label>
+                <div class="layui-input-inline">
+                    <select name="status" class="layui-input">
+                        <option value="">全部</option>
+                        <option value="0">待派</option>
+                        <option value="1">已派</option>
+                        <option value="2">挂起</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="duty-query">
+                    <i class="layui-icon layui-icon-search"></i>
+                    查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i>
+                    重置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="duty-table" lay-filter="duty-table"></table>
+    </div>
+</div>
+</body>
+
+<!-- 情形：待派/已派/挂起 -->
+<script type="text/html" id="duty-status">
+    {{#  if(d.status === 1){ }}<span class="pear-btn pear-btn-sm pear-btn-primary" style="pointer-events:none;">已派</span>
+    {{#  } else if(d.status === 2){ }}<span class="pear-btn pear-btn-sm pear-btn-danger" style="pointer-events:none;">挂起</span>
+    {{#  } else { }}<span class="pear-btn pear-btn-sm" style="pointer-events:none;">待派</span>{{#  } }}
+</script>
+
+<!-- 事项类别 -->
+<script type="text/html" id="duty-type">
+    {{#  if(d.itemType === 2){ }}上门维修技术服务
+    {{#  } else if(d.itemType === 3){ }}跨区作业服务点值守
+    {{#  } else { }}检修复查{{#  } }}
+    {{#  if(d.busySeason === 1){ }}<span style="color:#c0392b;">（重点期）</span>{{#  } }}
+</script>
+
+<!-- 倒计时：从到场当天末尾一刻往前倒，到今天还剩几个日历日（负=已过期） -->
+<script type="text/html" id="duty-countdown">
+    {{#  if(d.dueAt){ }}
+    {{#  var due = new Date(d.dueAt.replace(/-/g,'/'));
+          var today = new Date();
+          var d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          var d1 = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+          var left = Math.round((d1 - d0) / 86400000); }}
+    {{#  if(d.status === 0){ }}<span style="{{ left <= 0 ? 'color:#c0392b;font-weight:bold;' : '' }}">{{ left <= 0 ? '今天到期' : '剩' + left + '日' }}</span>
+    {{#  } else { }}—{{#  } }}
+    {{#  } }}
+</script>
+
+<!-- 当前受派班组 / 头一回 -->
+<script type="text/html" id="duty-team">
+    {{#  if(d.assignedTeamNo){ }}<div>当前：{{ d.assignedTeamNo }}</div>{{#  } }}
+    {{#  if(d.firstTeamNo){ }}<div style="color:#888;font-size:12px;">头回：{{ d.firstTeamNo }} / {{ layui.util.toDateString(d.firstAssignTime, 'yyyy-MM-dd HH:mm:ss') }}</div>{{#  } }}
+</script>
+
+<!-- 行内只读操作：只看流水，无补单/撤单 -->
+<script type="text/html" id="duty-bar">
+    <button class="pear-btn pear-btn-primary pear-btn-sm" lay-event="logs"><i class="layui-icon layui-icon-list"></i> 流水</button>
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery', 'layer', 'util'], function () {
+        let table = layui.table;
+        let form = layui.form;
+        let $ = layui.jquery;
+        let layer = layui.layer;
+
+        let MODULE_PATH = rootPath + "/amssDutyTask/";
+        let cols = [
+            [
+                {title: '事项号', field: 'itemNo', align: 'center', width: 150},
+                {title: '事项类别', field: 'itemType', align: 'center', width: 190, templet: '#duty-type'},
+                {title: '到场末尾一刻', field: 'dueAt', align: 'center', width: 170},
+                {title: '倒计时', field: 'dueAt', align: 'center', width: 100, templet: '#duty-countdown'},
+                {title: '提前开口(日)', field: 'amount', align: 'center', width: 100},
+                {title: '情形', field: 'status', align: 'center', width: 90, templet: '#duty-status'},
+                {title: '受派班组 / 头一回', field: 'assignedTeamNo', align: 'center', width: 230, templet: '#duty-team'},
+                {title: '派单事由', field: 'content', align: 'center'},
+                {title: '挂起缘故', field: 'holdReason', align: 'center', width: 220},
+                {title: '操作', toolbar: '#duty-bar', align: 'center', width: 110, fixed: 'right'}
+            ]
+        ];
+
+        table.render({
+            elem: '#duty-table',
+            url: MODULE_PATH + 'list',
+            page: true,
+            method: 'get',
+            cols: cols,
+            skin: 'line',
+            defaultToolbar: ['refresh', 'filter', 'print', 'exports'],
+            where: {
+                orderByColumn: "id",
+                isAsc: "asc"
+            }
+        });
+
+        table.on('tool(duty-table)', function (obj) {
+            if (obj.event === 'logs') {
+                window.showLogs(obj.data.itemNo);
+            }
+        });
+
+        form.on('submit(duty-query)', function (data) {
+            table.reload('duty-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+
+        // 只看一件事项的派出/收回流水；头一条不动，收回也不覆盖头回派给谁
+        window.showLogs = function (itemNo) {
+            let loading = layer.load();
+            $.get(MODULE_PATH + 'logs/' + encodeURIComponent(itemNo), function (rows) {
+                layer.close(loading);
+                let html = '<table class="layui-table" style="margin:10px;width:96%;">'
+                    + '<thead><tr><th>时刻</th><th>班组</th><th>动作</th><th>缘故</th></tr></thead><tbody>';
+                if (!rows || rows.length === 0) {
+                    html += '<tr><td colspan="4" style="text-align:center;">暂无流水</td></tr>';
+                } else {
+                    rows.forEach(function (r) {
+                        html += '<tr><td>' + layui.util.toDateString(r.actionTime, 'yyyy-MM-dd HH:mm:ss')
+                            + '</td><td>' + (r.teamNo || '')
+                            + '</td><td>' + (r.action === 2 ? '收回' : '派出')
+                            + '</td><td>' + (r.reason || '') + '</td></tr>';
+                    });
+                }
+                html += '</tbody></table>';
+                layer.open({
+                    type: 1,
+                    title: '事项 ' + itemNo + ' 派单流水（只读）',
+                    area: ['640px', '360px'],
+                    content: html
+                });
+            }).fail(function () {
+                layer.close(loading);
+                layer.msg('流水查询失败', {icon: 2});
+            });
+        };
+    });
+</script>
+</html>
